@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Responsive Python IDE</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+    <script>
+        // Prevents the "flash of unstyled content" or white corners in dark mode.
+        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Fira Code', monospace;
+            overscroll-behavior: none;
+            background-color: #f0f2f5; /* Light mode background */
+            transition: background-color 0.5s ease;
+            overflow: hidden; /* Prevent scrollbars from starry background */
+        }
+        .dark body {
+            background-color: #0d1117; /* Dark mode background */
+        }
+        /* Starry Galaxy Background */
+        .star-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background-repeat: repeat;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+        .dark .star-bg {
+            opacity: 1;
+        }
+        #stars1 {
+            background-image: radial-gradient(1px 1px at 20px 30px, #eee, rgba(0,0,0,0)), radial-gradient(1px 1px at 40px 70px, #fff, rgba(0,0,0,0)), radial-gradient(1px 1px at 50px 160px, #ddd, rgba(0,0,0,0)), radial-gradient(1px 1px at 90px 40px, #fff, rgba(0,0,0,0)), radial-gradient(2px 2px at 130px 80px, #fff, rgba(0,0,0,0)), radial-gradient(2px 2px at 160px 120px, #ddd, rgba(0,0,0,0));
+            background-size: 200px 200px;
+            animation: zoom 20s infinite;
+        }
+        #stars2 {
+            background-image: radial-gradient(1px 1px at 50px 50px, #fff, rgba(0,0,0,0)), radial-gradient(1px 1px at 100px 100px, #ddd, rgba(0,0,0,0)), radial-gradient(2px 2px at 150px 150px, #fff, rgba(0,0,0,0));
+            background-size: 300px 300px;
+            animation: zoom 30s infinite;
+        }
+        @keyframes zoom {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        .main-grid {
+            height: calc(100vh - 100px); /* Adjust for header and footer */
+        }
+        .loader-container {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(17, 24, 39, 0.8);
+            backdrop-filter: blur(5px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 999;
+            flex-direction: column;
+            gap: 1rem;
+            color: white;
+            transition: opacity 0.5s ease;
+        }
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Loading text animation */
+        .loading-dots::after {
+            content: '...';
+            animation: dots 1.5s steps(3, end) infinite;
+            display: inline-block;
+            width: 1.2em;
+            text-align: left;
+        }
+        @keyframes dots {
+            0% { content: '.'; }
+            33% { content: '..'; }
+            66% { content: '...'; }
+        }
+        .solid-ui {
+            background-color: #ffffff;
+            border: 1px solid #e5e7eb;
+        }
+        .dark .solid-ui {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+        }
+        #output-container {
+            color: #1f2937 !important; /* Dark gray for light mode */
+        }
+        .dark #output-container {
+            color: #e5e7eb !important; /* Light gray for dark mode */
+        }
+        .output-heading-container {
+            background-color: #f3f4f6;
+        }
+        .dark .output-heading-container {
+            background-color: #334155;
+        }
+        .output-heading {
+             color: #4b5563 !important;
+        }
+        .dark .output-heading {
+             color: #d1d5db !important;
+        }
+        .mobile-btn-active-code {
+            background-color: #2563eb !important;
+            color: white !important;
+        }
+        .mobile-btn-active-output {
+            background-color: #f59e0b !important;
+            color: #1f2937 !important;
+        }
+    </style>
+</head>
+<body class="text-gray-900 dark:text-gray-200">
+    <div id="stars1" class="star-bg"></div>
+    <div id="stars2" class="star-bg"></div>
+
+    <div id="loader" class="loader-container">
+        <div class="loader"></div>
+        <p id="loader-text" class="loading-dots">Initializing</p>
+        <p class="text-sm text-gray-400">This may take a moment.</p>
+    </div>
+
+    <div class="flex flex-col h-screen">
+        <!-- Header -->
+        <header class="p-3 flex justify-between items-center shadow-lg z-10 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border-b border-gray-200/50 dark:border-gray-700/50">
+            <h1 class="text-xl font-bold">
+                <span class="text-blue-600 dark:text-blue-400">Python</span>
+                <span class="text-yellow-500 dark:text-yellow-400">IDE</span>
+            </h1>
+            <div class="flex items-center gap-2 md:gap-4">
+                <button id="theme-toggle" type="button" class="bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-lg text-sm p-2.5">
+                    <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                    <svg id="theme-toggle-light-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+                </button>
+                <!-- Mobile View Toggles -->
+                <button id="code-view-btn" class="md:hidden mobile-btn-active-code text-white font-bold py-2 px-4 rounded-lg text-sm">Code</button>
+                <button id="output-view-btn" class="md:hidden bg-gray-500 text-white font-bold py-2 px-4 rounded-lg text-sm">Output</button>
+                <button id="run-button" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 md:px-6 rounded-lg transition-all duration-300 flex items-center gap-2 disabled:bg-gray-500 disabled:cursor-not-allowed disabled:opacity-50">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg>
+                    <span class="hidden sm:inline">Run</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content (Editor + Output) -->
+        <main class="flex-grow md:grid md:grid-cols-2 gap-2 p-2 main-grid relative">
+            <!-- Editor Panel -->
+            <div id="editor-panel" class="solid-ui rounded-lg shadow-md overflow-hidden h-full w-full md:static absolute inset-0">
+                <div id="editor-container" class="w-full h-full"></div>
+            </div>
+
+            <!-- Output Panel -->
+            <div id="output-panel" class="solid-ui rounded-lg shadow-md flex-col h-full w-full md:flex md:static absolute inset-0 hidden">
+                <div class="p-3 output-heading-container rounded-t-lg">
+                    <h2 class="font-semibold output-heading">Output</h2>
+                </div>
+                <pre id="output-container" class="flex-grow p-4 overflow-y-auto whitespace-pre-wrap text-sm"></pre>
+            </div>
+        </main>
+        
+        <!-- Footer -->
+        <footer class="p-2 text-center text-xs text-gray-500 dark:text-gray-400">
+            Webpage by Nitin 2025
+        </footer>
+    </div>
+
+    <!-- Pyodide Loader - MUST be before Monaco Loader -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+    <!-- Monaco Editor Loader -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs/loader.min.js"></script>
+
+    <script>
+        const initialCode = `# Welcome to the Python IDE!
+# Standard libraries like math, random, and datetime are built-in.
+# Packages like numpy, pandas, and matplotlib are pre-loaded.
+
+import random
+import datetime
+import pandas as pd
+
+# --- Random Example ---
+print("--- Random Library ---")
+random_number = random.randint(1, 100)
+print(f"A random number between 1 and 100: {random_number}\\n")
+
+# --- Datetime Example ---
+print("--- Datetime Library ---")
+now = datetime.datetime.now()
+print(f"Current date and time: {now.strftime('%Y-%m-%d %H:%M:%S')}\\n")
+
+# --- Pandas Example ---
+print("--- Pandas Library ---")
+data = {'Product': ['Apples', 'Bananas', 'Cherries'],
+        'Price': [1.20, 0.75, 3.50]}
+df = pd.DataFrame(data)
+print("Here is a pandas DataFrame:")
+print(df)
+
+# --- Matplotlib Example ---
+# Uncomment the lines below to see a plot.
+# import matplotlib.pyplot as plt
+# plt.figure(figsize=(6, 4))
+# plt.bar(df['Product'], df['Price'])
+# plt.title("Fruit Prices")
+# plt.ylabel("Price ($)")
+# plt.show()
+`;
+
+        const editorContainer = document.getElementById('editor-container');
+        const outputContainer = document.getElementById('output-container');
+        const runButton = document.getElementById('run-button');
+        const loader = document.getElementById('loader');
+        const loaderText = document.getElementById('loader-text');
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        const themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
+        const themeToggleLightIcon = document.getElementById('theme-toggle-light-icon');
+        
+        const codeViewBtn = document.getElementById('code-view-btn');
+        const outputViewBtn = document.getElementById('output-view-btn');
+        const editorPanel = document.getElementById('editor-panel');
+        const outputPanel = document.getElementById('output-panel');
+
+
+        let editor;
+        let pyodide;
+
+        function initializeEditor() {
+            return new Promise((resolve) => {
+                require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.33.0/min/vs' } });
+                require(['vs/editor/editor.main'], function () {
+                    const currentTheme = document.documentElement.classList.contains('dark') ? 'vs-dark' : 'vs';
+                    editor = monaco.editor.create(editorContainer, {
+                        value: initialCode,
+                        language: 'python',
+                        theme: currentTheme,
+                        automaticLayout: true,
+                        fontSize: 14,
+                        fontFamily: 'Fira Code',
+                        minimap: { enabled: false },
+                        wordWrap: 'on',
+                        padding: { top: 10 },
+                    });
+                    resolve();
+                });
+            });
+        }
+
+        async function initializePyodide() {
+            runButton.disabled = true;
+            outputContainer.textContent = 'Initializing Python kernel...';
+            pyodide = await loadPyodide();
+            loaderText.textContent = 'Loading Python Packages';
+            outputContainer.textContent += '\\nLoading required packages (numpy, pandas, matplotlib)...';
+            await pyodide.loadPackage(["numpy", "pandas", "matplotlib"]);
+            outputContainer.textContent = 'Ready. You can run your code now.';
+            console.log("Pyodide and packages loaded.");
+        }
+
+        async function main() {
+            await initializePyodide();
+            loaderText.textContent = 'Starting Code Editor';
+            await initializeEditor();
+
+            // Hide loader only after everything is done
+            loader.style.opacity = '0';
+            setTimeout(() => { loader.style.display = 'none'; }, 500);
+            runButton.disabled = false;
+        }
+        main();
+        
+        function updateThemeIcons() {
+            if (document.documentElement.classList.contains('dark')) {
+                themeToggleDarkIcon.classList.add('hidden');
+                themeToggleLightIcon.classList.remove('hidden');
+            } else {
+                themeToggleDarkIcon.classList.remove('hidden');
+                themeToggleLightIcon.classList.add('hidden');
+            }
+        }
+        
+        themeToggleBtn.addEventListener('click', function() {
+            document.documentElement.classList.toggle('dark');
+            const isDark = document.documentElement.classList.contains('dark');
+            localStorage.setItem('color-theme', isDark ? 'dark' : 'light');
+            updateThemeIcons();
+
+            if (editor) {
+                monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs');
+            }
+        });
+
+        // Set initial icon state
+        updateThemeIcons();
+
+        // Mobile View Toggle Logic
+        function setMobileView(view) {
+            if (view === 'code') {
+                editorPanel.classList.remove('hidden');
+                outputPanel.classList.add('hidden');
+                codeViewBtn.classList.add('mobile-btn-active-code');
+                codeViewBtn.classList.remove('bg-gray-500');
+                outputViewBtn.classList.remove('mobile-btn-active-output');
+                outputViewBtn.classList.add('bg-gray-500');
+            } else { // 'output'
+                editorPanel.classList.add('hidden');
+                outputPanel.classList.remove('hidden');
+                codeViewBtn.classList.remove('mobile-btn-active-code');
+                codeViewBtn.classList.add('bg-gray-500');
+                outputViewBtn.classList.add('mobile-btn-active-output');
+                outputViewBtn.classList.remove('bg-gray-500');
+            }
+        }
+
+        codeViewBtn.addEventListener('click', () => setMobileView('code'));
+        outputViewBtn.addEventListener('click', () => setMobileView('output'));
+
+
+        async function runCode() {
+            if (!pyodide || !editor) return;
+
+            runButton.disabled = true;
+            runButton.innerHTML = 'Running...';
+            
+            const code = editor.getValue();
+            let outputBuffer = [];
+            
+            try {
+                // Override Python's print function to capture output in a buffer
+                pyodide.globals.set("print", (s) => {
+                    outputBuffer.push({type: 'text', content: s.toString()});
+                });
+                
+                // Set up plot redirection
+                pyodide.runPython(`
+                    import io, base64
+                    import matplotlib.pyplot as plt
+                    
+                    _plot_images = []
+                    
+                    def _new_show():
+                        buf = io.BytesIO()
+                        plt.savefig(buf, format='png', bbox_inches='tight', transparent=True)
+                        buf.seek(0)
+                        img_str = base64.b64encode(buf.read()).decode('utf-8')
+                        _plot_images.append(f"data:image/png;base64,{img_str}")
+                        plt.clf()
+                    
+                    plt.show = _new_show
+                `);
+
+                let result = await pyodide.runPythonAsync(code);
+                
+                if (result !== undefined) {
+                    outputBuffer.push({type: 'text', content: `\\nResult:\\n${result.toString()}`});
+                }
+                
+                // Retrieve any plots that were created
+                let plots = pyodide.globals.get('_plot_images').toJs();
+                if (plots.length > 0) {
+                     plots.forEach(p => outputBuffer.push({type: 'image', content: p}));
+                }
+                pyodide.runPython("_plot_images.clear()");
+
+
+            } catch (err) {
+                outputBuffer.push({type: 'error', content: err.toString()});
+            } finally {
+                // Render buffered output to the DOM once
+                outputContainer.innerHTML = ''; // Clear previous output
+                
+                outputBuffer.forEach(item => {
+                    if (item.type === 'image') {
+                        const imgElement = document.createElement('img');
+                        imgElement.src = item.content;
+                        imgElement.alt = "matplotlib plot";
+                        imgElement.className = "max-w-full h-auto rounded-lg my-2 mx-auto block bg-white/70 dark:bg-gray-800/70 p-2 shadow-md";
+                        outputContainer.appendChild(document.createElement('br'));
+                        outputContainer.appendChild(imgElement);
+                    } else if (item.type === 'error') {
+                        const errorSpan = document.createElement('span');
+                        errorSpan.className = 'text-red-500';
+                        errorSpan.textContent = item.content;
+                        outputContainer.appendChild(errorSpan);
+                        outputContainer.appendChild(document.createElement('br'));
+                    } else {
+                        const textNode = document.createTextNode(item.content);
+                        outputContainer.appendChild(textNode);
+                        outputContainer.appendChild(document.createElement('br'));
+                    }
+                });
+                
+                // Switch to output view on mobile after running
+                if (window.innerWidth < 768) {
+                    setMobileView('output');
+                }
+                
+                runButton.disabled = false;
+                runButton.innerHTML = `
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg>
+                    <span class="hidden sm:inline">Run</span>
+                `;
+            }
+        }
+
+        runButton.addEventListener('click', () => {
+             // Use setTimeout to yield to the main thread, preventing the UI from freezing on click
+            setTimeout(runCode, 0);
+        });
+
+    </script>
+</body>
+</html>
